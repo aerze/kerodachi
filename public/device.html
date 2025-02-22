@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Device</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
+      integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+  </head>
+  <body>
+    you are logged in, congrat
+    <pre id="debug"></pre>
+    <button id="idle">Idle</button>
+    <button id="sleep">eepy time</button>
+    <script>
+      const $debug = document.getElementById("debug");
+      const $idle = document.getElementById("idle");
+      const $sleep = document.getElementById("sleep");
+
+      const debug = {};
+      function print() {
+        $debug.textContent = JSON.stringify(debug, null, 2);
+      }
+
+      const socket = io("/dachi");
+      socket.on("connect", handleConnect);
+      socket.on("disconnect", handleDisconnect);
+
+      function handleConnect() {
+        debug.connected = true;
+        $idle.addEventListener("click", () => {
+          socket.emit("action", { type: "idle" });
+        });
+        $sleep.addEventListener("click", () => {
+          socket.emit("action", { type: "sleep" });
+        });
+        print();
+      }
+
+      function handleDisconnect() {
+        debug.connected = false;
+        print();
+      }
+    </script>
+  </body>
+</html>
