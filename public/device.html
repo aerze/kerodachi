@@ -31,22 +31,74 @@
       const socket = io("/dachi");
       socket.on("connect", handleConnect);
       socket.on("disconnect", handleDisconnect);
+      socket.on("dachi_update", handleDachiUpdate);
+      socket.on("_", handleDachiUpdate);
 
       function handleConnect() {
         debug.connected = true;
-        $idle.addEventListener("click", () => {
-          socket.emit("action", { type: "idle" });
-        });
-        $sleep.addEventListener("click", () => {
-          socket.emit("action", { type: "sleep" });
-        });
+        $idle.addEventListener("click", actions.idle);
+        $sleep.addEventListener("click", actions.sleep);
         print();
       }
 
       function handleDisconnect() {
         debug.connected = false;
+        $idle.removeEventListener("click", actions.idle);
+        $sleep.removeEventListener("click", actions.sleep);
         print();
       }
+
+      function handleDachiUpdate(dachi) {
+        console.log(typeof dachi, dachi);
+        debug.dachi = {
+          ...debug.dachi,
+          ...dachi,
+        };
+        print();
+      }
+
+      // const read = {
+      //   dachi: () => {
+      //     socket.emit("read", { type: "dachi" }, (dachi) => {
+      //       debug.dachi = dachi;
+      //     });
+      //   },
+      //   shop: () => {
+      //     socket.emit("read", { type: "shop" }, (shop) => {
+      //       debug.shop = shop;
+      //     });
+      //   },
+      // };
+
+      const actions = {
+        idle: () => {
+          socket.emit("action", { type: "idle" });
+        },
+        sleep: () => {
+          socket.emit("action", { type: "sleep" });
+        },
+        buy: (itemId) => {
+          socket.emit("action", { type: "buy", itemId });
+        },
+        // consume: (itemId) => {
+        //   socket.emit("action", { type: "consume", itemId  });
+        // },
+        move: (direction) => {
+          socket.emit("action", { type: "move", direction });
+        },
+        emote: (emoteId) => {
+          socket.emit("action", { type: "emote", emoteId });
+        },
+        watch: () => {
+          socket.emit("action", { type: "watch" });
+        },
+        fishing: () => {
+          socket.emit("action", { type: "fishing" });
+        },
+        mining: () => {
+          socket.emit("action", { type: "mining" });
+        },
+      };
     </script>
   </body>
 </html>

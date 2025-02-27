@@ -84,5 +84,31 @@
 ### Research
 
 - Licenses
+
   - [ ] MIT
   - [ ] AGPL
+
+- actions
+  - can't accept new action until last action completes (lock on player)
+  - one per client per frame
+  - some actions have cooldowns
+    - emote 3s
+    - for each action, store the last complete event
+    - send emote again too early
+      -> lasttime - currenttime, elapsed time
+      -> cooldown - elapsedtime -> you must wait x seconds
+
+```ts
+actions: map<dachi, action>;
+setAction();
+getAllActions();
+```
+
+### short term todo
+
+- [x] check for null mods
+- [x] initialize rate mod on dachi
+- [ ] need a check on action to validate action change
+- [ ] pre tick phase to validate ongoing mods
+- [ ] post tick phase to check on stats and auto crash
+- [ ] implment non-state action

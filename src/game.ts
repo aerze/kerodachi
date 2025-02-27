@@ -1,10 +1,10 @@
 import http from "http";
-import { Db, MongoClient, WithId } from "mongodb";
+import { Db, MongoClient, ObjectId, WithId } from "mongodb";
 import { Socket, Server as SocketServer } from "socket.io";
 import { getSession, OAUTH_SESSION } from "./express";
-import { DachiAPI } from "./dachi-api";
-import { DachiData, DachiState } from "./types";
-import { Gold, Rest, Energy } from "./game-config";
+import { DachiAPI, removeExpiredStatRateMods, setStateStatRateMods, tickEnergy, tickGold, tickRest } from "./dachi-api";
+import { DachiAction, DachiActionCooldowns, DachiData, DachiResponse, DachiState } from "./types";
+import { GameConfig, ActionCooldowns } from "./game-config";
 
 export type System = {
   io: SocketServer;
@@ -22,12 +22,22 @@ const system: System = {
   dachi: null!,
 };
 
+export type Game = {
+  active: boolean;
+  frame: number;
+};
+
 const game = {
   active: false,
   frame: 0,
 };
 
 const sessions = new Map<Socket, WithId<DachiData>>();
+const activeIds = new Set<ObjectId>();
+const actions = new Map<ObjectId, DachiAction | null>();
+const actionCooldowns = new Map<ObjectId, DachiActionCooldowns>();
+const playerCooldowns = new Map<ObjectId, number>();
+let lastFrameTime = Date.now();
 
 async function init(server: http.Server, io: SocketServer, mongo: MongoClient, port: number) {
   console.log("🐸 init");
@@ -69,43 +79,113 @@ async function init(server: http.Server, io: SocketServer, mongo: MongoClient, p
 }
 
 function update() {
+  // name something chicago -badcop
+  // LainIsCute
+
   game.frame += 1;
-  if (game.active) setTimeout(update, 1000);
+  if (game.active) setTimeout(update, GameConfig.minFrameTimeMs);
+  const frameStartTime = Date.now();
+  const globalShouldSave = GameConfig.globalShouldSave(game);
 
-  let globalShouldSave = game.frame % 10 === 0;
+  // main dachi loop
   for (const [socket, dachi] of sessions) {
-    let shouldSave = globalShouldSave;
+    //#region actions
+    const queuedAction = actions.get(dachi._id);
+    if (queuedAction) {
+      switch (queuedAction.type) {
+        case "idle": {
+          dachi.state = DachiState.IDLE;
+          setStateStatRateMods(dachi, GameConfig.StateMods.idle);
+          break;
+        }
 
-    switch (dachi.state) {
-      case DachiState.IDLE: {
-        dachi.gold = clamp(Gold.min, Gold.max, dachi.gold + Gold.rate);
-        dachi.rest = clamp(Rest.min, Rest.max, dachi.rest + Rest.rate);
-        dachi.energy = clamp(Energy.min, Energy.max, dachi.energy + Energy.rate);
-        break;
+        case "crash": {
+          dachi.state = DachiState.CRASH;
+          setStateStatRateMods(dachi, GameConfig.StateMods.crash);
+          break;
+        }
+
+        case "sleep": {
+          dachi.state = DachiState.SLEEP;
+          setStateStatRateMods(dachi, GameConfig.StateMods.sleep);
+          break;
+        }
+
+        case "watch": {
+          dachi.state = DachiState.WATCHING;
+          setStateStatRateMods(dachi, GameConfig.StateMods.watch);
+          break;
+        }
+
+        case "fishing": {
+          dachi.state = DachiState.FISHING;
+          setStateStatRateMods(dachi, GameConfig.StateMods.fishing);
+          break;
+        }
+
+        case "mining": {
+          dachi.state = DachiState.MINING;
+          setStateStatRateMods(dachi, GameConfig.StateMods.mining);
+          break;
+        }
       }
+      actions.set(dachi._id, null);
+    }
 
-      case DachiState.NAPPING: {
-        dachi.gold = clamp(Gold.min, Gold.max, dachi.gold + Gold.rate * 0.5);
-        dachi.rest = clamp(Rest.min, Rest.max, dachi.rest + Rest.rate * 4 * -1);
-        dachi.energy = clamp(Energy.min, Energy.max, dachi.energy + Energy.rate);
-        break;
+    removeExpiredStatRateMods(dachi, frameStartTime);
+
+    //#region stats
+    let shouldSave = globalShouldSave;
+    let shouldSendThin = true;
+
+    // if (game.frame % GameConfig.Rest.tickRate) {
+    tickRest(dachi);
+    // }
+    // if (game.frame % GameConfig.Energy.tickRate) {
+    tickEnergy(dachi);
+    // }
+    if (game.frame % GameConfig.Gold.tickRate) {
+      tickGold(dachi);
+    }
+    //#endregion
+
+    //#region stat check
+    if (dachi.rest === 0) {
+      queueAction(dachi, { type: "crash", options: {} }, frameStartTime);
+    }
+
+    console.log(">> state", DachiState[dachi.state]);
+    if (dachi.state === DachiState.CRASH) {
+      const cooldowns = actionCooldowns.get(dachi._id)!;
+      const lastCrashTime = cooldowns?.crash ?? 0;
+      const timeSinceLastCrash = frameStartTime - lastCrashTime;
+      if (timeSinceLastCrash >= ActionCooldowns.crash) {
+        queueAction(dachi, { type: "idle", options: {} }, frameStartTime);
       }
     }
+    //#endregion
 
     if (shouldSave) {
       system.dachi.save(dachi);
     }
 
-    console.log(`🐸 g:${dachi.gold}, r:${dachi.rest}, e:${dachi.energy}`);
+    if (shouldSendThin) {
+      sendDachiUpdateThin(socket, dachi);
+    } else {
+      socket.emit("thin", dachi);
+    }
   }
 
-  console.log("game.frame: ", game.frame);
+  const frameEndTime = Date.now();
+  const frameDuration = frameEndTime - frameStartTime;
+  console.log(`f:${game.frame} (${frameDuration} + ${frameStartTime - lastFrameTime})ms`);
+  lastFrameTime = frameEndTime;
 }
 
+//#region dachi
 async function handleDachiConnect(socket: Socket) {
-  socket.on("disconnect", handleDachiDisconnect.bind(null, socket));
   if (!attachSession(socket)) return;
-  console.log("new 'dachi session");
+  console.log("🐸 new dachi connected");
 
   const dachi = await system.dachi.loadWithTwitchId(socket);
   if (!dachi) {
@@ -113,10 +193,23 @@ async function handleDachiConnect(socket: Socket) {
     return socket.disconnect();
   }
 
+  if (activeIds.has(dachi._id)) {
+    console.log("🐸 this player is already connected");
+    return socket.disconnect();
+  }
+
+  socket.on("disconnect", handleDachiDisconnect.bind(null, socket));
   socket.on("action", handleDachiAction.bind(null, socket, dachi));
+  socket.on("read", handleDachiRead.bind(null, socket, dachi));
 
   sessions.set(socket, dachi);
+  activeIds.add(dachi._id);
+  actions.set(dachi._id, null);
+  actionCooldowns.set(dachi._id, {} as DachiActionCooldowns);
+  playerCooldowns.set(dachi._id, 0);
+
   console.log("🐸 dachi added");
+  socket.emit("dachi_update", dachi);
 }
 
 async function handleDachiDisconnect(socket: Socket, reason: string) {
@@ -125,35 +218,120 @@ async function handleDachiDisconnect(socket: Socket, reason: string) {
   if (dachi) {
     system.dachi.save(dachi);
     sessions.delete(socket);
+    activeIds.delete(dachi._id);
+    actions.delete(dachi._id);
+    actionCooldowns.delete(dachi._id);
+    playerCooldowns.delete(dachi._id);
     return;
   }
 }
 
-async function handleDachiAction(socket: Socket, dachi: WithId<DachiData>, action: { type: string; options: any }) {
-  switch (action.type) {
-    case "idle": {
-      console.log("🐸 dachi is idle");
-      dachi.state = DachiState.IDLE;
-      return;
-    }
+async function handleDachiAction(
+  socket: Socket,
+  dachi: WithId<DachiData>,
+  action: DachiAction,
+  callback: (res?: DachiResponse) => void
+) {
+  const now = Date.now();
+  const cooldowns = actionCooldowns.get(dachi._id)!;
 
-    case "sleep": {
-      console.log("🐸 dachi is sleeping");
-      dachi.state = DachiState.NAPPING;
-      return;
+  if (dachi.state === DachiState.CRASH) {
+    const lastCrashTime = cooldowns?.crash ?? 0;
+    const timeSinceLastCrash = now - lastCrashTime;
+    if (timeSinceLastCrash <= ActionCooldowns.crash) {
+      console.log(`🐸 still crashed (action: ${action.type})`);
+      return callback({
+        status: "error",
+        reason: "cooldown",
+        options: {
+          timeElapsed: timeSinceLastCrash,
+          timeRemaining: ActionCooldowns.crash - timeSinceLastCrash,
+        },
+      });
     }
-
-    default:
-      return;
   }
+
+  // validate cooldown
+  const lastPlayerActionTime = playerCooldowns.get(dachi._id) ?? 0;
+  const timeSinceLastPlayerAction = now - lastPlayerActionTime;
+  const playerActionCooldownFailed = timeSinceLastPlayerAction <= GameConfig.playerActionCooldownMs;
+  if (playerActionCooldownFailed) {
+    console.log("🐸 too soon (player)");
+    return callback({
+      status: "error",
+      reason: "player_cooldown",
+      options: {
+        timeElapsed: timeSinceLastPlayerAction,
+        timeRemaining: ActionCooldowns[action.type] - timeSinceLastPlayerAction,
+      },
+    });
+  }
+
+  const lastActionTime = cooldowns?.[action.type] ?? 0;
+  const timeSinceLastAction = now - lastActionTime;
+  if (timeSinceLastAction <= ActionCooldowns[action.type]) {
+    console.log(`🐸 too soon (action: ${action.type})`);
+    return callback({
+      status: "error",
+      reason: "cooldown",
+      options: {
+        timeElapsed: timeSinceLastAction,
+        timeRemaining: ActionCooldowns[action.type] - timeSinceLastAction,
+      },
+    });
+  }
+
+  switch (action.type) {
+    case "fishing": {
+      if (dachi.rest <= GameConfig.Rest.rate * GameConfig.StateMods.fishing.rest.value!) {
+        return callback({
+          status: "failed",
+          reason: "insufficient_rest",
+          options: {
+            timeElapsed: timeSinceLastAction,
+            timeRemaining: ActionCooldowns[action.type] - timeSinceLastAction,
+          },
+        });
+      }
+    }
+
+    case "mining": {
+      if (dachi.rest <= GameConfig.Rest.rate * GameConfig.StateMods.mining.rest.value!) {
+        return callback({
+          status: "failed",
+          reason: "insufficient_rest",
+          options: {
+            timeElapsed: timeSinceLastAction,
+            timeRemaining: ActionCooldowns[action.type] - timeSinceLastAction,
+          },
+        });
+      }
+    }
+  }
+
+  queueAction(dachi, action, now);
 }
 
+function queueAction(dachi: WithId<DachiData>, action: DachiAction, time: number) {
+  playerCooldowns.set(dachi._id, time);
+  actionCooldowns.get(dachi._id)![action.type] = time;
+  actions.set(dachi._id, action);
+}
+
+async function handleDachiRead(socket: Socket, dachi: WithId<DachiData>, read: { type: string; options: any }) {}
+
+function sendDachiUpdateThin(socket: Socket, dachi: DachiData) {
+  socket.emit("_", [dachi.rest, dachi.energy, dachi.gold]);
+}
+//#endregion
+
+//#region pond
 function handlePondConnect(socket: Socket) {
   console.log("new pond session");
 }
+//#endregion
 
 function attachSession(socket: Socket) {
-  console.log("handle connect");
   const cookies = parseCookies(socket.request.headers.cookie);
   const sessionId = cookies?.[OAUTH_SESSION];
   let session = getSession(sessionId);
@@ -167,6 +345,7 @@ function attachSession(socket: Socket) {
   return true;
 }
 
+//#region helpers
 function reduceCookieToObject(map: Record<string, string>, cookie: string) {
   const [key, value] = cookie.trim().split("=");
   map[key] = value;
@@ -180,5 +359,7 @@ function parseCookies(cookieString: string = "") {
 function clamp(min: number, max: number, value: number) {
   return Math.min(max, Math.max(min, value));
 }
+
+//#endregion
 
 export { init };
