@@ -2,7 +2,7 @@ export enum DachiState {
   IDLE,
   CRASH,
   SLEEP,
-  WATCHING,
+  WATCH,
   FISHING,
   MINING,
 }

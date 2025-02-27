@@ -158,6 +158,16 @@ export function tickGold(dachi: DachiData) {
   setGold(dachi, dachi.gold + goldRate * GameConfig.Gold.tickRate);
 }
 
+export function clientFormat(dachi: DachiData) {
+  return {
+    name: dachi.name,
+    state: DachiState[dachi.state],
+    rest: dachi.rest,
+    energy: dachi.energy,
+    gold: dachi.gold,
+  };
+}
+
 function getFinalRate(rate: number, mods: DachiStatRateMod[]) {
   let mul = 0;
   let add = 0;

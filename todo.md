@@ -104,11 +104,21 @@ setAction();
 getAllActions();
 ```
 
-### short term todo
+### todo (yesterday)
 
 - [x] check for null mods
 - [x] initialize rate mod on dachi
-- [ ] need a check on action to validate action change
-- [ ] pre tick phase to validate ongoing mods
-- [ ] post tick phase to check on stats and auto crash
+- [x] need a check on action to validate action change
+- [x] pre tick phase to validate ongoing mods
+- [x] post tick phase to check on stats and auto crash
 - [ ] implment non-state action
+
+### todo
+
+- [ ] get all the buttons working
+- [ ] get a little guy on screen
+- [ ] show dachis on overlay
+- [ ] deploy
+- [ ] make it pretty
+- [ ] balance??
+- [ ] make a variable named ThisVariableWasBroughtToYouByContemelia

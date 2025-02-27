@@ -12,49 +12,391 @@
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
     />
+    <style>
+      html,
+      body {
+        width: 600px;
+        height: 400px;
+        margin: 0;
+        background: #181a1b;
+        /* border: 1px solid red; */
+      }
+
+      div {
+        box-sizing: border-box;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: row;
+        height: 100%;
+        background-image: url("assets/background.png"), url("assets/desktop-background.png");
+      }
+
+      .arrows-container {
+        flex: 0 0 150px;
+        position: relative;
+      }
+
+      .arrows {
+        position: absolute;
+        left: 50px;
+        top: 150px;
+      }
+
+      .button-up {
+        width: 90px;
+        height: 90px;
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-image: url("assets/buttons1.png");
+      }
+
+      .button-down {
+        width: 90px;
+        height: 90px;
+        background-image: url("assets/buttons2.png");
+        background-repeat: no-repeat;
+        background-size: cover;
+      }
+
+      .screen-container {
+        flex: 1 0;
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .screen {
+        position: absolute;
+        bottom: 25px;
+        width: 260px;
+        height: 260px;
+        /* background-color: rgb(18, 22, 16); */
+        background-color: rgb(221, 248, 191);
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .hud {
+        display: flex;
+        flex-direction: row;
+        font-family: monospace;
+        justify-content: space-between;
+        flex: 0 0 20px;
+        font-size: 16px;
+      }
+
+      .dachi {
+        flex: 1 0 auto;
+        position: relative;
+      }
+
+      .sprite {
+        position: absolute;
+        bottom: 20px;
+        left: 120px;
+        width: 120px;
+        height: 120px;
+        background-size: cover;
+        image-rendering: pixelated;
+      }
+
+      .menu {
+        width: 100px;
+        height: 100%;
+        background-color: rgb(251, 255, 246);
+        display: none;
+        flex-direction: column;
+        padding-left: 6px;
+      }
+
+      .menu-item {
+        font-family: monospace;
+        font-size: 20px;
+        font-weight: 300;
+      }
+
+      .menu-item::before {
+        content: "";
+      }
+
+      .menu-item.selected {
+        /* font-weight: 900; */
+      }
+
+      .menu-item.selected::before {
+        content: "> ";
+      }
+
+      .screen-dev {
+        width: 100%;
+        height: 100%;
+      }
+
+      .button:active {
+        transform: translateY(5px);
+      }
+
+      .face-buttons-container {
+        flex: 0 0 150px;
+      }
+
+      .face-buttons {
+        position: relative;
+      }
+
+      .button-a {
+        position: absolute;
+        left: 0px;
+        top: 230px;
+        width: 90px;
+        height: 90px;
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-image: url("assets/buttons3.png");
+      }
+
+      .button-b {
+        position: absolute;
+        left: 50px;
+        top: 160px;
+        width: 90px;
+        height: 90px;
+        background-repeat: no-repeat;
+        background-size: cover;
+        background-image: url("assets/buttons4.png");
+      }
+    </style>
   </head>
   <body>
+    <div class="dev container">
+      <div class="dev arrows-container">
+        <div class="arrows">
+          <div id="button-up" class="button-up button"></div>
+          <div id="button-down" class="button-down button"></div>
+        </div>
+      </div>
+      <div class="dev screen-container">
+        <div id="screen" class="screen">
+          <div id="hud" class="hud">
+            <div class="rest">💤<span id="hud-rest"></span></div>
+            <div class="energy">🍬<span id="hud-energy"></span></div>
+            <div class="gold">🪙<span id="hud-gold"></span></div>
+            <div class="status"><span id="hud-status"></span></div>
+            <div class="connection"><span id="hud-connection"></span></div>
+          </div>
+          <div id="dachi" class="dachi">
+            <div id="sprite" class="sprite"></div>
+            <div id="menu" class="menu"></div>
+          </div>
+        </div>
+      </div>
+      <div class="dev face-buttons-container">
+        <div class="face-buttons">
+          <div id="button-a" class="button-a button"></div>
+          <div id="button-b" class="button-b button"></div>
+        </div>
+      </div>
+    </div>
     you are logged in, congrat
     <pre id="debug"></pre>
     <button id="idle">Idle</button>
     <button id="sleep">eepy time</button>
+    <button
+      type="button"
+      onclick="window.open(document.location.href, 'minidash','left=0, top=0, width=600, height=400');return false;"
+    >
+      Pop Out ↗
+    </button>
     <script>
+      const $screen = document.getElementById("screen");
+      const $hud_rest = document.getElementById("hud-rest");
+      const $hud_energy = document.getElementById("hud-energy");
+      const $hud_gold = document.getElementById("hud-gold");
+      const $hud_status = document.getElementById("hud-status");
+      const $hud_connection = document.getElementById("hud-connection");
+      const $dachi = document.getElementById("dachi");
+      const $sprite = document.getElementById("sprite");
+      const $menu = document.getElementById("menu");
+
+      const $button_up = document.getElementById("button-up");
+      const $button_down = document.getElementById("button-down");
+      const $button_a = document.getElementById("button-a");
+      const $button_b = document.getElementById("button-b");
+
+      const $dev = document.getElementById("screen-dev");
       const $debug = document.getElementById("debug");
       const $idle = document.getElementById("idle");
       const $sleep = document.getElementById("sleep");
 
-      const debug = {};
-      function print() {
-        $debug.textContent = JSON.stringify(debug, null, 2);
+      function div(className, textContent) {
+        const d = document.createElement("div");
+        d.className = className;
+        d.textContent = textContent;
+        return d;
+      }
+
+      //#region menu
+      const MENU_CLOSED = 0;
+      const MENU_MAIN = 1;
+
+      const menu_main_config = [
+        { text: "Idle", action: "idle", html: div("menu-item selected", "Idle") },
+        { text: "Sleep", action: "sleep", html: div("menu-item", "Sleep") },
+        { text: "Watch", action: "watch", html: div("menu-item", "Watch") },
+      ];
+
+      let menuState = 0;
+      let menuIndex = 0;
+
+      // const t: HTMLDivElement = h("div", { class: "menu-item" });
+
+      $button_a.addEventListener("click", () => {
+        switch (menuState) {
+          case MENU_CLOSED:
+            menuState = MENU_MAIN;
+            return renderMenu();
+
+          case MENU_MAIN:
+            const action = menu_main_config[menuIndex].action;
+            actions?.[action]?.();
+            menuState = MENU_CLOSED;
+            return renderMenu();
+        }
+      });
+
+      $button_b.addEventListener("click", () => {
+        switch (menuState) {
+          case MENU_CLOSED:
+          case MENU_MAIN:
+            menuState = MENU_CLOSED;
+            return renderMenu();
+        }
+      });
+
+      $button_up.addEventListener("click", () => {
+        $menu.children[menuIndex].classList.remove("selected");
+        menuIndex = clampInt(0, $menu.children.length - 1, menuIndex - 1);
+        $menu.children[menuIndex].classList.add("selected");
+      });
+
+      $button_down.addEventListener("click", () => {
+        $menu.children[menuIndex].classList.remove("selected");
+        menuIndex = clampInt(0, $menu.children.length - 1, menuIndex + 1);
+        $menu.children[menuIndex].classList.add("selected");
+      });
+
+      function renderMenu() {
+        switch (menuState) {
+          case MENU_CLOSED:
+            $menu.innerHTML = "";
+            $menu.style.display = "none";
+            return;
+
+          case MENU_MAIN:
+            for (const item of menu_main_config) {
+              $menu.appendChild(item.html);
+            }
+            $menu.style.display = "flex";
+            return;
+        }
+      }
+
+      //#endregion
+
+      //#region sprite
+      const spriteStateConfig = {
+        IDLE: {
+          backgroundImage: `url("assets/frog/idle.gif")`,
+        },
+        SLEEP: {
+          backgroundImage: `url("assets/frog/sleep.png")`,
+        },
+        WATCH: {
+          backgroundImage: `url("assets/frog/sit.png")`,
+        },
+      };
+
+      function renderSprite(state) {
+        switch (state) {
+          case "IDLE":
+            $sprite.style.backgroundImage = spriteStateConfig.IDLE.backgroundImage;
+            break;
+
+          case "CRASH":
+          case "SLEEP":
+            $sprite.style.backgroundImage = spriteStateConfig.SLEEP.backgroundImage;
+            break;
+
+          case "WATCH":
+            $sprite.style.backgroundImage = spriteStateConfig.WATCH.backgroundImage;
+            break;
+
+          default:
+            break;
+        }
+      }
+
+      renderSprite("IDLE");
+
+      //#endregion
+
+      const game = {
+        dachi: {
+          state: "IDLE",
+        },
+      };
+
+      function render() {
+        $hud_rest.textContent = Math.floor((game.dachi?.rest ?? 0) / 100);
+        $hud_energy.textContent = Math.floor((game.dachi?.energy ?? 0) / 100);
+        $hud_gold.textContent = game.dachi?.gold;
+        $hud_status.textContent = game.dachi.state;
+        $hud_connection.textContent = socket.connected ? "CONN" : "NO CONN";
+        renderSprite(game.dachi.state);
       }
 
       const socket = io("/dachi");
       socket.on("connect", handleConnect);
       socket.on("disconnect", handleDisconnect);
       socket.on("dachi_update", handleDachiUpdate);
-      socket.on("_", handleDachiUpdate);
+      socket.on("_", handleDachiUpdateThin);
 
       function handleConnect() {
-        debug.connected = true;
+        $button_up.addEventListener("click", () => console.log("buttonUp"));
+        $button_down.addEventListener("click", () => console.log("buttonDown"));
         $idle.addEventListener("click", actions.idle);
         $sleep.addEventListener("click", actions.sleep);
-        print();
+        render();
       }
 
       function handleDisconnect() {
         debug.connected = false;
         $idle.removeEventListener("click", actions.idle);
         $sleep.removeEventListener("click", actions.sleep);
-        print();
+        render();
       }
 
       function handleDachiUpdate(dachi) {
         console.log(typeof dachi, dachi);
-        debug.dachi = {
-          ...debug.dachi,
+        game.dachi = {
+          ...game.dachi,
           ...dachi,
         };
-        print();
+        render();
+      }
+
+      function handleDachiUpdateThin([state, rest, energy, gold]) {
+        console.log([state, rest, energy, gold]);
+        game.dachi.state = state;
+        game.dachi.rest = rest;
+        game.dachi.energy = energy;
+        game.dachi.gold = gold;
+        render();
       }
 
       // const read = {
@@ -99,6 +441,10 @@
           socket.emit("action", { type: "mining" });
         },
       };
+
+      function clampInt(min, max, value) {
+        return Math.min(max, Math.max(min, Math.round(value)));
+      }
     </script>
   </body>
 </html>

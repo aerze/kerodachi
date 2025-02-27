@@ -14,19 +14,19 @@ export const GameConfig = {
   Gold: {
     rate: 200,
     rateMods: [] as DachiStatRateMod[],
-    tickRate: 5,
+    tickRate: 10,
     min: 0,
     max: 999999,
   },
   Rest: {
-    rate: -100,
+    rate: -10,
     rateMods: [] as DachiStatRateMod[],
     tickRate: 1,
     min: 0,
     max: 10000,
   },
   Energy: {
-    rate: -100,
+    rate: -10,
     rateMods: [] as DachiStatRateMod[],
     tickRate: 1,
     min: 0,
