@@ -3,12 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YOU ARE NOT LOGGED IN DUMMY</title>
+    <title>KeroDachi Login</title>
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        max-width: 300px;
+      }
+    </style>
   </head>
   <body>
-    you gotta log into twitch
+    Use PopOut to get a small window
+    <button
+      type="button"
+      onclick="window.open(document.location.href, 'minidash','left=0, top=0, width=600, height=400');return false;"
+    >
+      Pop Out ↗
+    </button>
+
+    You must log into twitch to play.
     <form action="login" method="get">
-      <button>LOGIN</button>
+      <button type="button">LOGIN</button>
     </form>
   </body>
 </html>

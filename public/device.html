@@ -26,6 +26,15 @@
         box-sizing: border-box;
       }
 
+      .pop-out {
+        position: fixed;
+        /* appearance: none; */
+        width: 32px;
+        height: 32px;
+        right: 20px;
+        top: 20px;
+      }
+
       .container {
         display: flex;
         flex-direction: row;
@@ -173,6 +182,14 @@
     </style>
   </head>
   <body>
+    <button
+      type="button"
+      class="pop-out"
+      alt="open in a small window"
+      onclick="window.open(document.location.href, 'minidash','left=0, top=0, width=600, height=400');return false;"
+    >
+      ↗️
+    </button>
     <div class="dev container">
       <div class="dev arrows-container">
         <div class="arrows">
@@ -202,16 +219,6 @@
         </div>
       </div>
     </div>
-    you are logged in, congrat
-    <pre id="debug"></pre>
-    <button id="idle">Idle</button>
-    <button id="sleep">eepy time</button>
-    <button
-      type="button"
-      onclick="window.open(document.location.href, 'minidash','left=0, top=0, width=600, height=400');return false;"
-    >
-      Pop Out ↗
-    </button>
     <script>
       const $screen = document.getElementById("screen");
       const $hud_rest = document.getElementById("hud-rest");
