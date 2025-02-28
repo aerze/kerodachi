@@ -90,6 +90,7 @@ const ᓚᘏᗢ = "cat";
 function update() {
   // name something chicago -badcop
   // LainIsCute
+  console.log(`>> updating ${sessions.size} dachi`);
 
   game.frame += 1;
   if (game.active) setTimeout(update, GameConfig.minFrameTimeMs);
