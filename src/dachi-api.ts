@@ -185,7 +185,7 @@ function getFinalRate(rate: number, mods: DachiStatRateMod[]) {
 
   // prettier-ignore
   let finalRate = rate + (rate * mul) + add;
-  console.log(finalRate);
+  // console.log(finalRate);
   return finalRate;
 }
 

@@ -9,6 +9,7 @@ interface TwitchAuthOptions {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  adminIds: string[];
 }
 
 interface SessionUserDetails {
@@ -26,6 +27,7 @@ const config: TwitchAuthOptions = {
   clientId: process.env.TWITCH_OAUTH_CLIENT_ID!,
   clientSecret: process.env.TWITCH_OAUTH_CLIENT_SECRET!,
   redirectUri: process.env.TWITCH_OAUTH_REDIRECT_URI!,
+  adminIds: process.env.KERODACHI_ADMIN_IDS!.split(","),
 };
 
 app.use(cors());
@@ -83,6 +85,16 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   // Redirect to twitch
   res.redirect(url.toString());
 });
+
+app.use("/admin", (req, res, next) => {
+  const userId = (req as any)?.user?.userid;
+  if (config.adminIds.includes(userId)) {
+    return next();
+  } else {
+    res.redirect(DEVICE_URL);
+  }
+});
+
 app.use(express.static(path.join(__dirname, "../public")));
 
 /**

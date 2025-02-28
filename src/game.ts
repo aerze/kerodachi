@@ -40,18 +40,18 @@ const game = {
   frame: 0,
 };
 
-const sessions = new Map<Socket, WithId<DachiData>>();
-const activeIds = new Set<ObjectId>();
+const dachi_map = new Map<Socket, WithId<DachiData>>();
+const socket_map = new Map<ObjectId, Socket>();
 const actions = new Map<ObjectId, DachiAction | null>();
 const actionCooldowns = new Map<ObjectId, DachiActionCooldowns>();
 const playerCooldowns = new Map<ObjectId, number>();
 let lastFrameTime = Date.now();
 
 async function init(server: http.Server, io: SocketServer, mongo: MongoClient, port: number) {
-  console.log("🐸 init");
+  console.log("🐸: server Starting");
 
   await mongo.connect();
-  console.log("Mongo connected");
+  console.log("🐸: mongo Connected");
 
   system.io = io;
   system.http = server;
@@ -64,6 +64,7 @@ async function init(server: http.Server, io: SocketServer, mongo: MongoClient, p
 
   system.io.of("/dachi").on("connect", handleDachiConnect);
   system.io.of("/pond").on("connect", handlePondConnect);
+  system.io.of("/admin").on("connect", handleAdminConnect);
 
   system.http.listen(port);
   system.http.on("error", (error: any) => {
@@ -82,7 +83,7 @@ async function init(server: http.Server, io: SocketServer, mongo: MongoClient, p
   system.http.on("listening", () => {
     const addr = server.address();
     const bind = typeof addr === "string" ? "pipe " + addr : "port " + addr?.port;
-    console.log("CLAIRE: Server listening on " + bind + " 🤔");
+    console.log("🐸: server listening on " + bind);
   });
 }
 
@@ -90,18 +91,21 @@ const ᓚᘏᗢ = "cat";
 function update() {
   // name something chicago -badcop
   // LainIsCute
-  console.log(`>> updating ${sessions.size} dachi`);
 
   game.frame += 1;
+  console.log(`🐸: f:${game.frame} d:${dachi_map.size}`);
   if (game.active) setTimeout(update, GameConfig.minFrameTimeMs);
   const frameStartTime = Date.now();
   const globalShouldSave = GameConfig.globalShouldSave(game);
+  let shouldSave = globalShouldSave;
+  let shouldSendThinUpdate = true;
 
   // main dachi loop
-  for (const [socket, dachi] of sessions) {
+  for (const [socket, dachi] of dachi_map) {
     //#region actions
     const queuedAction = actions.get(dachi._id);
     if (queuedAction) {
+      shouldSendThinUpdate = false;
       switch (queuedAction.type) {
         case "idle": {
           dachi.state = DachiState.IDLE;
@@ -145,9 +149,6 @@ function update() {
     removeExpiredStatRateMods(dachi, frameStartTime);
 
     //#region stats
-    let shouldSave = globalShouldSave;
-    let shouldSendThin = true;
-
     if (game.frame % GameConfig.Rest.tickRate === 0) {
       tickRest(dachi);
     }
@@ -164,7 +165,6 @@ function update() {
       queueAction(dachi, { type: "crash", options: {} }, frameStartTime);
     }
 
-    console.log(">> state", DachiState[dachi.state]);
     if (dachi.state === DachiState.CRASH) {
       const cooldowns = actionCooldowns.get(dachi._id)!;
       const lastCrashTime = cooldowns?.crash ?? 0;
@@ -179,56 +179,62 @@ function update() {
       system.dachi.save(dachi);
     }
 
-    if (shouldSendThin) {
+    if (shouldSendThinUpdate) {
       sendDachiUpdateThin(socket, dachi);
     } else {
-      socket.emit("thin", dachi);
+      socket.emit("dachi_update", clientFormat(dachi));
     }
   }
 
   const frameEndTime = Date.now();
   const frameDuration = frameEndTime - frameStartTime;
-  console.log(`f:${game.frame} (${frameDuration} + ${frameStartTime - lastFrameTime})ms`);
+  console.log(`🐸: f:${game.frame} (${frameDuration} + ${frameStartTime - lastFrameTime})ms`);
   lastFrameTime = frameEndTime;
+  updateAllAdmins();
 }
 
 //#region dachi
 async function handleDachiConnect(socket: Socket) {
   if (!attachSession(socket)) return;
-  console.log("🐸 new dachi connected");
+  console.log("🐸: socket connected");
 
   const dachi = await system.dachi.loadWithTwitchId(socket);
   if (!dachi) {
-    console.log("🐸 failed to load dachi");
+    console.log("🐸: failed to load from db");
     return socket.disconnect();
   }
 
-  if (activeIds.has(dachi._id)) {
-    console.log("🐸 this player is already connected");
-    return socket.disconnect();
+  if (socket_map.has(dachi._id)) {
+    console.log("🐸: dachi already connected, disconnecting prev client");
+    const session = socket_map.get(dachi._id)!;
+    const disconnectHandlers = session?.listeners("disconnect");
+    for (const handler of disconnectHandlers) {
+      session.off("disconnect", handler);
+    }
+    handleDachiDisconnect(socket, "duplicate user");
   }
 
   socket.on("disconnect", handleDachiDisconnect.bind(null, socket));
   socket.on("action", handleDachiAction.bind(null, socket, dachi));
   socket.on("read", handleDachiRead.bind(null, socket, dachi));
 
-  sessions.set(socket, dachi);
-  activeIds.add(dachi._id);
+  dachi_map.set(socket, dachi);
+  socket_map.set(dachi._id, socket);
   actions.set(dachi._id, null);
   actionCooldowns.set(dachi._id, {} as DachiActionCooldowns);
   playerCooldowns.set(dachi._id, 0);
 
-  console.log("🐸 dachi added");
+  console.log(`🐸: dachi connected: ${dachi.name}`);
   socket.emit("dachi_update", clientFormat(dachi));
 }
 
 async function handleDachiDisconnect(socket: Socket, reason: string) {
-  console.log("🐸 dachi disconnected");
-  const dachi = sessions.get(socket);
+  console.log(`🐸: socket/dachi disconnected: ${reason}`);
+  const dachi = dachi_map.get(socket);
   if (dachi) {
     system.dachi.save(dachi);
-    sessions.delete(socket);
-    activeIds.delete(dachi._id);
+    dachi_map.delete(socket);
+    socket_map.delete(dachi._id);
     actions.delete(dachi._id);
     actionCooldowns.delete(dachi._id);
     playerCooldowns.delete(dachi._id);
@@ -249,7 +255,7 @@ async function handleDachiAction(
     const lastCrashTime = cooldowns?.crash ?? 0;
     const timeSinceLastCrash = now - lastCrashTime;
     if (timeSinceLastCrash <= ActionCooldowns.crash) {
-      console.log(`🐸 still crashed (action: ${action.type})`);
+      // console.log(`🐸 still crashed (action: ${action.type})`);
       return callback?.({
         status: "error",
         reason: "cooldown",
@@ -266,7 +272,7 @@ async function handleDachiAction(
   const timeSinceLastPlayerAction = now - lastPlayerActionTime;
   const playerActionCooldownFailed = timeSinceLastPlayerAction <= GameConfig.playerActionCooldownMs;
   if (playerActionCooldownFailed) {
-    console.log("🐸 too soon (player)");
+    // console.log("🐸 too soon (player)");
     return callback?.({
       status: "error",
       reason: "player_cooldown",
@@ -280,7 +286,7 @@ async function handleDachiAction(
   const lastActionTime = cooldowns?.[action.type] ?? 0;
   const timeSinceLastAction = now - lastActionTime;
   if (timeSinceLastAction <= ActionCooldowns[action.type]) {
-    console.log(`🐸 too soon (action: ${action.type})`);
+    // console.log(`🐸 too soon (action: ${action.type})`);
     return callback?.({
       status: "error",
       reason: "cooldown",
@@ -341,12 +347,76 @@ function handlePondConnect(socket: Socket) {
 }
 //#endregion
 
+//#region admin
+const adminIds = process.env.KERODACHI_ADMIN_IDS!.split(",");
+const admin_sockets = new Set<Socket>();
+
+function handleAdminConnect(socket: Socket) {
+  const cookies = parseCookies(socket.request.headers.cookie);
+  const sessionId = cookies?.[OAUTH_SESSION];
+  let session = getSession(sessionId);
+  if (!session) {
+    console.log(`🐸: socket missing session`);
+    socket.disconnect();
+    return;
+  }
+
+  if (!adminIds.includes(session.userid)) {
+    console.log(`🐸: user attemped to login as admin: ${session.username}|`);
+    socket.disconnect();
+    return;
+  }
+
+  socket.data.session = session;
+
+  socket.on("disconnect", handleAdminDisconnect.bind(null, socket));
+
+  admin_sockets.add(socket);
+
+  console.log(`🐸: admin connected: ${session.username}|`);
+  socket.emit("update", adminSnapshot());
+}
+
+function handleAdminDisconnect(socket: Socket, reason: string) {
+  console.log(`🐸: admin disconnected: ${reason}`);
+  admin_sockets.delete(socket);
+}
+
+function updateAllAdmins() {
+  for (const socket of admin_sockets) {
+    socket.emit("update", adminSnapshot());
+  }
+}
+
+function updateAllAdminsThin() {
+  for (const socket of admin_sockets) {
+    socket.emit("thin", adminSnapshotThin());
+  }
+}
+
+function adminSnapshot() {
+  return {
+    game_active: game.active,
+    game_frame: game.frame,
+    dachi_count: dachi_map.size,
+  };
+}
+
+function adminSnapshotThin() {
+  return {
+    game_active: game.active,
+    game_frame: game.frame,
+    dachi_count: dachi_map.size,
+  };
+}
+//#endregion
+
 function attachSession(socket: Socket) {
   const cookies = parseCookies(socket.request.headers.cookie);
   const sessionId = cookies?.[OAUTH_SESSION];
   let session = getSession(sessionId);
   if (!session) {
-    console.log("socket connected with no session");
+    console.log(`🐸: socket missing session`);
     socket.disconnect();
     return false;
   }

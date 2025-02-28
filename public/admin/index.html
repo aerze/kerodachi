@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
+      integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+  </head>
+  <body>
+    <pre id="code"></pre>
+    <script>
+      let data = { connected: false };
+      const $code = document.getElementById("code");
+      const socket = io("/admin");
+      socket.on("connect", () => {
+        data.connected = true;
+        render();
+      });
+      socket.on("disconnect", () => {
+        data.connected = false;
+        render();
+      });
+      socket.on("update", (update) => {
+        data = {
+          ...data,
+          ...update,
+        };
+        render();
+      });
+      socket.on("thin", (update) => {
+        data = {
+          ...data,
+          ...update,
+        };
+        render();
+      });
+
+      function render() {
+        $code.textContent = JSON.stringify(data, null, 2);
+      }
+    </script>
+  </body>
+</html>
