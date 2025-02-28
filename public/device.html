@@ -235,11 +235,6 @@
       const $button_a = document.getElementById("button-a");
       const $button_b = document.getElementById("button-b");
 
-      const $dev = document.getElementById("screen-dev");
-      const $debug = document.getElementById("debug");
-      const $idle = document.getElementById("idle");
-      const $sleep = document.getElementById("sleep");
-
       function div(className, textContent) {
         const d = document.createElement("div");
         d.className = className;
@@ -374,17 +369,10 @@
       socket.on("_", handleDachiUpdateThin);
 
       function handleConnect() {
-        $button_up.addEventListener("click", () => console.log("buttonUp"));
-        $button_down.addEventListener("click", () => console.log("buttonDown"));
-        $idle.addEventListener("click", actions.idle);
-        $sleep.addEventListener("click", actions.sleep);
         render();
       }
 
       function handleDisconnect() {
-        debug.connected = false;
-        $idle.removeEventListener("click", actions.idle);
-        $sleep.removeEventListener("click", actions.sleep);
         render();
       }
 
