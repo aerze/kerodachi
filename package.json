@@ -1,9 +1,11 @@
 {
   "name": "kerodachi",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx tsc",
+    "start": "node dist/main"
   },
   "author": "aerze <abby@mythril.co>",
   "license": "UNLICENSED",
