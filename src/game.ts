@@ -5,6 +5,8 @@ import { getSession, OAUTH_SESSION } from "./express";
 import {
   clientFormat,
   DachiAPI,
+  OverlayFormat,
+  overlayFormat,
   removeExpiredStatRateMods,
   setStateStatRateMods,
   tickEnergy,
@@ -89,11 +91,8 @@ async function init(server: http.Server, io: SocketServer, mongo: MongoClient, p
 
 const ᓚᘏᗢ = "cat";
 function update() {
-  // name something chicago -badcop
-  // LainIsCute
-
   game.frame += 1;
-  console.log(`🐸: f:${game.frame} d:${dachi_map.size}`);
+  // console.log(`🐸: f:${game.frame} d:${dachi_map.size}`);
   if (game.active) setTimeout(update, GameConfig.minFrameTimeMs);
   const frameStartTime = Date.now();
   const globalShouldSave = GameConfig.globalShouldSave(game);
@@ -188,9 +187,10 @@ function update() {
 
   const frameEndTime = Date.now();
   const frameDuration = frameEndTime - frameStartTime;
-  console.log(`🐸: f:${game.frame} (${frameDuration} + ${frameStartTime - lastFrameTime})ms`);
+  // console.log(`🐸: f:${game.frame} (${frameDuration} + ${frameStartTime - lastFrameTime})ms`);
   lastFrameTime = frameEndTime;
   updateAllAdmins();
+  updateAllOverlays();
 }
 
 //#region dachi
@@ -226,12 +226,14 @@ async function handleDachiConnect(socket: Socket) {
 
   console.log(`🐸: dachi connected: ${dachi.name}`);
   socket.emit("dachi_update", clientFormat(dachi));
+  emitAllOverlays("dachi_connect", overlayFormat(dachi));
 }
 
 async function handleDachiDisconnect(socket: Socket, reason: string) {
   console.log(`🐸: socket/dachi disconnected: ${reason}`);
   const dachi = dachi_map.get(socket);
   if (dachi) {
+    emitAllOverlays("dachi_disconnect", [dachi._id.toString()]);
     system.dachi.save(dachi);
     dachi_map.delete(socket);
     socket_map.delete(dachi._id);
@@ -342,8 +344,46 @@ function sendDachiUpdateThin(socket: Socket, dachi: DachiData) {
 //#endregion
 
 //#region pond
+const overlayToken = process.env.KERODACHI_OVERLAY_TOKEN!;
+const overlay_sockets = new Set<Socket>();
+
 function handlePondConnect(socket: Socket) {
-  console.log("new pond session");
+  console.log("overlay connectoin attempt");
+  if (socket.handshake.auth.token !== overlayToken) {
+    socket.disconnect();
+    return;
+  }
+
+  socket.on("disconnect", handlePondDisconnect.bind(null, socket));
+  overlay_sockets.add(socket);
+  console.log(`🐸: overlay connected`);
+  socket.emit("update", overlaySnapshot());
+}
+
+function handlePondDisconnect(socket: Socket, reason: string) {
+  console.log(`🐸: overlay disconnected: ${reason}`);
+  overlay_sockets.delete(socket);
+}
+
+function emitAllOverlays(event: string, ...args: any[]) {
+  for (const ᓚᘏᗢ of overlay_sockets) {
+    ᓚᘏᗢ.emit(event, ...args);
+  }
+}
+
+function updateAllOverlays() {
+  for (const socket of overlay_sockets) {
+    socket.emit("update", overlaySnapshot());
+  }
+}
+
+function overlaySnapshot() {
+  const LainIsCute: OverlayFormat[] = [];
+  for (const [_socket, dachi] of dachi_map) {
+    LainIsCute.push(overlayFormat(dachi));
+  }
+
+  return [Number(game.active), game.frame, dachi_map.size, LainIsCute];
 }
 //#endregion
 

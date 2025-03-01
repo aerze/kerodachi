@@ -30,7 +30,9 @@ export class DachiAPI {
         return false;
       }
 
-      console.log("📦 dachi saved: ", Boolean(result.matchedCount));
+      if (!result.matchedCount) {
+        console.log("📦 dachi failed to save");
+      }
       return Boolean(result.matchedCount);
     } catch (error) {
       console.log("📦 db error when saving");
@@ -166,6 +168,11 @@ export function clientFormat(dachi: DachiData) {
     energy: dachi.energy,
     gold: dachi.gold,
   };
+}
+
+export type OverlayFormat = [string, string, string, number, number, number];
+export function overlayFormat(dachi: WithId<DachiData>): OverlayFormat {
+  return [dachi._id.toString(), dachi.name, DachiState[dachi.state], dachi.rest, dachi.energy, dachi.gold];
 }
 
 function getFinalRate(rate: number, mods: DachiStatRateMod[]) {
