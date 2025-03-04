@@ -40,10 +40,10 @@ app.get("/", (req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use("/login", (req: Request, res: Response, next: NextFunction) => {
-  console.log("logging in dayo");
+  console.log("🚇logging in dayo");
   // check if login with twitch was rejected
   if (req.query?.["error"]) {
-    console.log("error dayo");
+    console.log("🚇 error dayo");
     return res.redirect(DEVICE_URL);
   }
 
@@ -51,7 +51,7 @@ app.use("/login", (req: Request, res: Response, next: NextFunction) => {
   const code = req.query["code"] as string;
   const state = req.query["state"];
   if (!state || state !== req.cookies[OAUTH_STATE]) {
-    console.log("mis-matched state dayo");
+    console.log("🚇 mis-matched state dayo");
     return res.redirect(DEVICE_URL);
   }
 
@@ -63,10 +63,9 @@ app.use("/login", (req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log("auth middle end");
   const sessionId = req.cookies[OAUTH_SESSION];
   const session = getSession(sessionId);
-  console.log("session", session);
+  // console.log("session", session);
   if (session) {
     (req as any).user = session;
     return next();

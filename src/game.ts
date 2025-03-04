@@ -35,19 +35,28 @@ const system: System = {
 export type Game = {
   active: boolean;
   frame: number;
+  lastFrameEndTime: number;
+  frameStartTime: number;
+  frameEndTime: number;
+  frameDuration: number;
+  frameDelay: number;
 };
 
 const game = {
   active: false,
   frame: 0,
+  lastFrameEndTime: Date.now(),
+  frameStartTime: 0,
+  frameEndTime: 0,
+  frameDuration: 0,
+  frameDelay: 0,
 };
 
 const dachi_map = new Map<Socket, WithId<DachiData>>();
-const socket_map = new Map<ObjectId, Socket>();
-const actions = new Map<ObjectId, DachiAction | null>();
-const actionCooldowns = new Map<ObjectId, DachiActionCooldowns>();
-const playerCooldowns = new Map<ObjectId, number>();
-let lastFrameTime = Date.now();
+const session_socket_map = new Map<string, Socket>();
+const actions = new Map<string, DachiAction | null>();
+const actionCooldowns = new Map<string, DachiActionCooldowns>();
+const playerCooldowns = new Map<string, number>();
 
 async function init(server: http.Server, io: SocketServer, mongo: MongoClient, port: number) {
   console.log("🐸: server Starting");
@@ -94,7 +103,7 @@ function update() {
   game.frame += 1;
   // console.log(`🐸: f:${game.frame} d:${dachi_map.size}`);
   if (game.active) setTimeout(update, GameConfig.minFrameTimeMs);
-  const frameStartTime = Date.now();
+  game.frameStartTime = Date.now();
   const globalShouldSave = GameConfig.globalShouldSave(game);
   let shouldSave = globalShouldSave;
   let shouldSendThinUpdate = true;
@@ -102,7 +111,8 @@ function update() {
   // main dachi loop
   for (const [socket, dachi] of dachi_map) {
     //#region actions
-    const queuedAction = actions.get(dachi._id);
+    const dachiId = dachi._id.toString();
+    const queuedAction = actions.get(dachiId);
     if (queuedAction) {
       shouldSendThinUpdate = false;
       switch (queuedAction.type) {
@@ -142,10 +152,10 @@ function update() {
           break;
         }
       }
-      actions.set(dachi._id, null);
+      actions.set(dachiId, null);
     }
 
-    removeExpiredStatRateMods(dachi, frameStartTime);
+    removeExpiredStatRateMods(dachi, game.frameStartTime);
 
     //#region stats
     if (game.frame % GameConfig.Rest.tickRate === 0) {
@@ -161,15 +171,15 @@ function update() {
 
     //#region stat check
     if (dachi.rest === 0) {
-      queueAction(dachi, { type: "crash", options: {} }, frameStartTime);
+      queueAction(dachi, { type: "crash", options: {} }, game.frameStartTime);
     }
 
     if (dachi.state === DachiState.CRASH) {
-      const cooldowns = actionCooldowns.get(dachi._id)!;
+      const cooldowns = actionCooldowns.get(dachiId)!;
       const lastCrashTime = cooldowns?.crash ?? 0;
-      const timeSinceLastCrash = frameStartTime - lastCrashTime;
+      const timeSinceLastCrash = game.frameStartTime - lastCrashTime;
       if (timeSinceLastCrash >= ActionCooldowns.crash) {
-        queueAction(dachi, { type: "idle", options: {} }, frameStartTime);
+        queueAction(dachi, { type: "idle", options: {} }, game.frameStartTime);
       }
     }
     //#endregion
@@ -185,10 +195,11 @@ function update() {
     }
   }
 
-  const frameEndTime = Date.now();
-  const frameDuration = frameEndTime - frameStartTime;
+  game.frameEndTime = Date.now();
+  game.frameDuration = game.frameEndTime - game.frameStartTime;
+  game.frameDelay = game.frameStartTime - game.lastFrameEndTime;
   // console.log(`🐸: f:${game.frame} (${frameDuration} + ${frameStartTime - lastFrameTime})ms`);
-  lastFrameTime = frameEndTime;
+  game.lastFrameEndTime = game.frameEndTime;
   updateAllAdmins();
   updateAllOverlays();
 }
@@ -198,31 +209,34 @@ async function handleDachiConnect(socket: Socket) {
   if (!attachSession(socket)) return;
   console.log("🐸: socket connected");
 
+  if (session_socket_map.has(socket.data.session.userid)) {
+    // disconnect old socket
+    console.log("🐸: dachi already connected, disconnecting prev client");
+    const existingSocket = session_socket_map.get(socket.data.session.userid)!;
+    const disconnectHandlers = existingSocket?.listeners("disconnect");
+    for (const handler of disconnectHandlers) {
+      existingSocket.off("disconnect", handler);
+    }
+    handleDachiDisconnect(existingSocket, "duplicate dachi");
+    // connect new socket
+  }
+
   const dachi = await system.dachi.loadWithTwitchId(socket);
   if (!dachi) {
     console.log("🐸: failed to load from db");
     return socket.disconnect();
   }
-
-  if (socket_map.has(dachi._id)) {
-    console.log("🐸: dachi already connected, disconnecting prev client");
-    const session = socket_map.get(dachi._id)!;
-    const disconnectHandlers = session?.listeners("disconnect");
-    for (const handler of disconnectHandlers) {
-      session.off("disconnect", handler);
-    }
-    handleDachiDisconnect(socket, "duplicate user");
-  }
+  const dachiId = dachi._id.toString();
 
   socket.on("disconnect", handleDachiDisconnect.bind(null, socket));
   socket.on("action", handleDachiAction.bind(null, socket, dachi));
   socket.on("read", handleDachiRead.bind(null, socket, dachi));
 
+  session_socket_map.set(socket.data.session.userid, socket);
   dachi_map.set(socket, dachi);
-  socket_map.set(dachi._id, socket);
-  actions.set(dachi._id, null);
-  actionCooldowns.set(dachi._id, {} as DachiActionCooldowns);
-  playerCooldowns.set(dachi._id, 0);
+  actions.set(dachiId, null);
+  actionCooldowns.set(dachiId, {} as DachiActionCooldowns);
+  playerCooldowns.set(dachiId, 0);
 
   console.log(`🐸: dachi connected: ${dachi.name}`);
   socket.emit("dachi_update", clientFormat(dachi));
@@ -233,13 +247,13 @@ async function handleDachiDisconnect(socket: Socket, reason: string) {
   console.log(`🐸: socket/dachi disconnected: ${reason}`);
   const dachi = dachi_map.get(socket);
   if (dachi) {
-    emitAllOverlays("dachi_disconnect", [dachi._id.toString()]);
+    const dachiId = dachi._id.toString();
+    emitAllOverlays("dachi_disconnect", [dachiId]);
     system.dachi.save(dachi);
     dachi_map.delete(socket);
-    socket_map.delete(dachi._id);
-    actions.delete(dachi._id);
-    actionCooldowns.delete(dachi._id);
-    playerCooldowns.delete(dachi._id);
+    actions.delete(dachiId);
+    actionCooldowns.delete(dachiId);
+    playerCooldowns.delete(dachiId);
     return;
   }
 }
@@ -251,7 +265,8 @@ async function handleDachiAction(
   callback: (res?: DachiResponse) => void
 ) {
   const now = Date.now();
-  const cooldowns = actionCooldowns.get(dachi._id)!;
+  const dachiId = dachi._id.toString();
+  const cooldowns = actionCooldowns.get(dachiId)!;
 
   if (dachi.state === DachiState.CRASH) {
     const lastCrashTime = cooldowns?.crash ?? 0;
@@ -270,7 +285,7 @@ async function handleDachiAction(
   }
 
   // validate cooldown
-  const lastPlayerActionTime = playerCooldowns.get(dachi._id) ?? 0;
+  const lastPlayerActionTime = playerCooldowns.get(dachiId) ?? 0;
   const timeSinceLastPlayerAction = now - lastPlayerActionTime;
   const playerActionCooldownFailed = timeSinceLastPlayerAction <= GameConfig.playerActionCooldownMs;
   if (playerActionCooldownFailed) {
@@ -331,9 +346,10 @@ async function handleDachiAction(
 }
 
 function queueAction(dachi: WithId<DachiData>, action: DachiAction, time: number) {
-  playerCooldowns.set(dachi._id, time);
-  actionCooldowns.get(dachi._id)![action.type] = time;
-  actions.set(dachi._id, action);
+  const dachiId = dachi._id.toString();
+  playerCooldowns.set(dachiId, time);
+  actionCooldowns.get(dachiId)![action.type] = time;
+  actions.set(dachiId, action);
 }
 
 async function handleDachiRead(socket: Socket, dachi: WithId<DachiData>, read: { type: string; options: any }) {}
@@ -438,7 +454,10 @@ function adminSnapshot() {
   return {
     game_active: game.active,
     game_frame: game.frame,
+    game_frame_duration: game.frameDuration,
+    game_frame_delay: game.frameDelay,
     dachi_count: dachi_map.size,
+    dachi_names: Array.from(dachi_map.values()).map((d) => d.name),
   };
 }
 
