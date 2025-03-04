@@ -218,6 +218,7 @@ async function handleDachiConnect(socket: Socket) {
       existingSocket.off("disconnect", handler);
     }
     handleDachiDisconnect(existingSocket, "duplicate dachi");
+    existingSocket.disconnect();
     // connect new socket
   }
 
@@ -456,6 +457,7 @@ function adminSnapshot() {
     game_frame: game.frame,
     game_frame_duration: game.frameDuration,
     game_frame_delay: game.frameDelay,
+    system_sockets: system.io.sockets.sockets.size,
     dachi_count: dachi_map.size,
     dachi_names: Array.from(dachi_map.values()).map((d) => d.name),
   };

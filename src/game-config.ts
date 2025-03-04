@@ -12,7 +12,7 @@ export const GameConfig = {
   },
   playerActionCooldownMs: 2000,
   Gold: {
-    rate: 25,
+    rate: 10,
     rateMods: [] as DachiStatRateMod[],
     tickRate: 10,
     min: 0,
