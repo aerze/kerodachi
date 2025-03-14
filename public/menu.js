@@ -24,7 +24,7 @@ export class Menu extends Events {
   };
 
   static getMenuLength(game) {
-    return Menu.menu_config[game.menu]?.length ?? 0;
+    return (Menu.menu_config[game.menu]?.length ?? 1) - 1;
   }
 
   static getMenuAction(game) {
