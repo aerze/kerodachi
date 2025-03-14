@@ -219,161 +219,96 @@
         </div>
       </div>
     </div>
-    <script>
-      const $screen = document.getElementById("screen");
-      const $hud_rest = document.getElementById("hud-rest");
-      const $hud_energy = document.getElementById("hud-energy");
-      const $hud_gold = document.getElementById("hud-gold");
-      const $hud_status = document.getElementById("hud-status");
-      const $hud_connection = document.getElementById("hud-connection");
-      const $dachi = document.getElementById("dachi");
-      const $sprite = document.getElementById("sprite");
-      const $menu = document.getElementById("menu");
+    <script type="module">
+      import { Input } from "./input.js";
+      import { Menu } from "./menu.js";
+      import { Sprite } from "./sprite.js";
+      import { Hud } from "./hud.js";
 
-      const $button_up = document.getElementById("button-up");
-      const $button_down = document.getElementById("button-down");
-      const $button_a = document.getElementById("button-a");
-      const $button_b = document.getElementById("button-b");
+      class Kero {
+        constructor(game) {
+          this.game = game;
+          this.input = new Input(this);
+          this.menu = new Menu(this);
+          this.sprite = new Sprite(this);
+          this.hud = new Hud(this);
 
-      function div(className, textContent) {
-        const d = document.createElement("div");
-        d.className = className;
-        d.textContent = textContent;
-        return d;
-      }
-
-      //#region menu
-      const MENU_CLOSED = 0;
-      const MENU_MAIN = 1;
-
-      const menu_main_config = [
-        { text: "Idle", action: "idle", html: div("menu-item selected", "Idle") },
-        { text: "Sleep", action: "sleep", html: div("menu-item", "Sleep") },
-        { text: "Watch", action: "watch", html: div("menu-item", "Watch") },
-      ];
-
-      let menuState = 0;
-      let menuIndex = 0;
-
-      // const t: HTMLDivElement = h("div", { class: "menu-item" });
-
-      $button_a.addEventListener("click", () => {
-        switch (menuState) {
-          case MENU_CLOSED:
-            menuState = MENU_MAIN;
-            return renderMenu();
-
-          case MENU_MAIN:
-            const action = menu_main_config[menuIndex].action;
-            actions?.[action]?.();
-            menuState = MENU_CLOSED;
-            return renderMenu();
+          this.socket = io("/dachi");
+          this.socket.on("connect", handleConnect);
+          this.socket.on("disconnect", handleDisconnect);
+          this.socket.on("dachi_update", handleDachiUpdate);
+          this.socket.on("_", handleDachiUpdateThin);
         }
-      });
 
-      $button_b.addEventListener("click", () => {
-        switch (menuState) {
-          case MENU_CLOSED:
-          case MENU_MAIN:
-            menuState = MENU_CLOSED;
-            return renderMenu();
-        }
-      });
-
-      $button_up.addEventListener("click", () => {
-        $menu.children[menuIndex].classList.remove("selected");
-        menuIndex = clampInt(0, $menu.children.length - 1, menuIndex - 1);
-        $menu.children[menuIndex].classList.add("selected");
-      });
-
-      $button_down.addEventListener("click", () => {
-        $menu.children[menuIndex].classList.remove("selected");
-        menuIndex = clampInt(0, $menu.children.length - 1, menuIndex + 1);
-        $menu.children[menuIndex].classList.add("selected");
-      });
-
-      function renderMenu() {
-        switch (menuState) {
-          case MENU_CLOSED:
-            $menu.innerHTML = "";
-            $menu.style.display = "none";
-            return;
-
-          case MENU_MAIN:
-            for (const item of menu_main_config) {
-              $menu.appendChild(item.html);
-            }
-            $menu.style.display = "flex";
-            return;
+        render() {
+          this.menu.render(this.game);
+          this.sprite.render(this.game);
+          this.hud.render(this.game);
         }
       }
-
-      //#endregion
-
-      //#region sprite
-      const spriteStateConfig = {
-        IDLE: {
-          backgroundImage: `url("assets/frog/idle.gif")`,
-        },
-        SLEEP: {
-          backgroundImage: `url("assets/frog/sleep.png")`,
-        },
-        WATCH: {
-          backgroundImage: `url("assets/frog/sit.png")`,
-        },
-      };
-
-      function renderSprite(state) {
-        switch (state) {
-          case "IDLE":
-            $sprite.style.backgroundImage = spriteStateConfig.IDLE.backgroundImage;
-            break;
-
-          case "CRASH":
-          case "SLEEP":
-            $sprite.style.backgroundImage = spriteStateConfig.SLEEP.backgroundImage;
-            break;
-
-          case "WATCH":
-            $sprite.style.backgroundImage = spriteStateConfig.WATCH.backgroundImage;
-            break;
-
-          default:
-            break;
-        }
-      }
-
-      renderSprite("IDLE");
-
-      //#endregion
 
       const game = {
+        menu: Menu.CLOSED,
+        menuSelectedIndex: 0,
         dachi: {
           state: "IDLE",
         },
       };
 
-      function render() {
-        $hud_rest.textContent = Math.floor((game.dachi?.rest ?? 0) / 100);
-        $hud_energy.textContent = Math.floor((game.dachi?.energy ?? 0) / 100);
-        $hud_gold.textContent = game.dachi?.gold;
-        $hud_status.textContent = game.dachi.state;
-        $hud_connection.textContent = socket.connected ? "CONN" : "NO CONN";
-        renderSprite(game.dachi.state);
-      }
+      const kero = new Kero(game);
+      kero.render();
 
-      const socket = io("/dachi");
-      socket.on("connect", handleConnect);
-      socket.on("disconnect", handleDisconnect);
-      socket.on("dachi_update", handleDachiUpdate);
-      socket.on("_", handleDachiUpdateThin);
+      kero.input.on(Input.A, () => {
+        switch (game.menu) {
+          case Menu.CLOSED:
+            game.menu = Menu.MAIN;
+            game.menuSelectedIndex = 0;
+            kero.menu.render(game);
+            return;
+
+          case Menu.MAIN:
+            const action = Menu.getMenuAction(game);
+            if (action) actions[action]();
+            return;
+        }
+      });
+
+      kero.input.on(Input.B, () => {
+        switch (game.menu) {
+          case Menu.MAIN:
+            game.menu = Menu.CLOSED;
+            game.menuSelectedIndex = 0;
+            kero.menu.render(game);
+            return;
+        }
+      });
+
+      kero.input.on(Input.UP, () => {
+        switch (game.menu) {
+          case Menu.MAIN:
+            game.menuSelectedIndex = Math.max(0, game.menuSelectedIndex - 1);
+            kero.menu.render(game);
+            return;
+        }
+      });
+
+      kero.input.on(Input.DOWN, () => {
+        switch (game.menu) {
+          case Menu.MAIN:
+            game.menuSelectedIndex = Math.min(Menu.getMenuLength(game), game.menuSelectedIndex + 1);
+            kero.menu.render(game);
+            return;
+        }
+      });
+
+      // const $screen = document.getElementById("screen");
 
       function handleConnect() {
-        render();
+        kero.render();
       }
 
       function handleDisconnect() {
-        render();
+        kero.render();
       }
 
       function handleDachiUpdate(dachi) {
@@ -382,7 +317,7 @@
           ...game.dachi,
           ...dachi,
         };
-        render();
+        kero.render();
       }
 
       function handleDachiUpdateThin([state, rest, energy, gold]) {
@@ -391,7 +326,7 @@
         game.dachi.rest = rest;
         game.dachi.energy = energy;
         game.dachi.gold = gold;
-        render();
+        kero.render();
       }
 
       // const read = {
@@ -409,31 +344,31 @@
 
       const actions = {
         idle: () => {
-          socket.emit("action", { type: "idle" });
+          kero.socket.emit("action", { type: "idle" });
         },
         sleep: () => {
-          socket.emit("action", { type: "sleep" });
+          kero.socket.emit("action", { type: "sleep" });
         },
         buy: (itemId) => {
-          socket.emit("action", { type: "buy", itemId });
+          kero.socket.emit("action", { type: "buy", itemId });
         },
         // consume: (itemId) => {
-        //   socket.emit("action", { type: "consume", itemId  });
+        //   kero.socket.emit("action", { type: "consume", itemId  });
         // },
         move: (direction) => {
-          socket.emit("action", { type: "move", direction });
+          kero.socket.emit("action", { type: "move", direction });
         },
         emote: (emoteId) => {
-          socket.emit("action", { type: "emote", emoteId });
+          kero.socket.emit("action", { type: "emote", emoteId });
         },
         watch: () => {
-          socket.emit("action", { type: "watch" });
+          kero.socket.emit("action", { type: "watch" });
         },
         fishing: () => {
-          socket.emit("action", { type: "fishing" });
+          kero.socket.emit("action", { type: "fishing" });
         },
         mining: () => {
-          socket.emit("action", { type: "mining" });
+          kero.socket.emit("action", { type: "mining" });
         },
       };
 
