@@ -165,6 +165,7 @@ function update() {
       tickEnergy(dachi);
     }
     if (game.frame % GameConfig.Gold.tickRate === 0) {
+      dachi.goldRate = GameConfig.Gold.rate;
       tickGold(dachi);
     }
     //#endregion
@@ -259,6 +260,13 @@ async function handleDachiDisconnect(socket: Socket, reason: string) {
   }
 }
 
+const items = {
+  cookie: 200,
+  sammich: 500,
+  pizza: 1000,
+  vim: 999999,
+};
+
 async function handleDachiAction(
   socket: Socket,
   dachi: WithId<DachiData>,
@@ -316,6 +324,50 @@ async function handleDachiAction(
   }
 
   switch (action.type) {
+    case "buy": {
+      console.log(">> buy");
+      const itemId: keyof typeof items = action?.itemId ?? null;
+      if (!itemId || typeof itemId !== "string") {
+        return callback({
+          status: "failed",
+          reason: "failed",
+          options: {},
+        });
+      }
+
+      const price = items[itemId];
+      if (price === undefined) {
+        return callback({
+          status: "failed",
+          reason: "failed",
+          options: {},
+        });
+      }
+
+      if (dachi.gold < price) {
+        return callback({
+          status: "failed",
+          reason: "broke",
+          options: {},
+        });
+      }
+
+      if (dachi.gold >= price) {
+        // buy item
+        dachi.inventory[itemId] = (dachi.inventory[itemId] ?? 0) + 1;
+
+        // spend money
+        dachi.gold = dachi.gold - price;
+
+        // respond to client
+        return callback({
+          status: "ok",
+          reason: "ok",
+          options: {},
+        });
+      }
+    }
+
     case "fishing": {
       if (dachi.rest <= GameConfig.Rest.rate * GameConfig.StateMods.fishing.rest.value!) {
         return callback({

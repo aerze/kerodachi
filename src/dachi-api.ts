@@ -56,6 +56,7 @@ export class DachiAPI {
       goldRate: GameConfig.Gold.rate,
       goldRateMods: [],
       twitchId: socket.data?.session?.userid,
+      inventory: {},
     };
     setStateStatRateMods(dachiData, GameConfig.StateMods.idle);
 

@@ -104,6 +104,16 @@
         position: relative;
       }
 
+      .emote {
+        position: absolute;
+        top: 20px;
+        left: 120px;
+        width: 64px;
+        height: 64px;
+        background-size: cover;
+        image-rendering: pixelated;
+      }
+
       .sprite {
         position: absolute;
         bottom: 20px;
@@ -138,7 +148,7 @@
       }
 
       .menu-item.selected::before {
-        content: "> ";
+        content: ">";
       }
 
       .screen-dev {
@@ -207,6 +217,7 @@
             <div class="connection"><span id="hud-connection"></span></div>
           </div>
           <div id="dachi" class="dachi">
+            <div id="emote" class="emote"></div>
             <div id="sprite" class="sprite"></div>
             <div id="menu" class="menu"></div>
           </div>
@@ -259,6 +270,7 @@
       kero.render();
 
       kero.input.on(Input.A, () => {
+        console.log(JSON.stringify(game, null, 2));
         switch (game.menu) {
           case Menu.CLOSED:
             game.menu = Menu.MAIN;
@@ -270,6 +282,12 @@
             const action = Menu.getMenuAction(game);
             if (action) actions[action]();
             return;
+
+          case Menu.SHOP:
+            const [itemId, price] = Menu.getMenuItemData(game);
+            if (game.dachi.gold >= price) {
+              actions.buy(itemId);
+            }
         }
       });
 
@@ -280,12 +298,18 @@
             game.menuSelectedIndex = 0;
             kero.menu.render(game);
             return;
+          case Menu.SHOP:
+            game.menu = Menu.MAIN;
+            game.menuSelectedIndex = 0;
+            kero.menu.render(game);
+            return;
         }
       });
 
       kero.input.on(Input.UP, () => {
         switch (game.menu) {
           case Menu.MAIN:
+          case Menu.SHOP:
             game.menuSelectedIndex = Math.max(0, game.menuSelectedIndex - 1);
             kero.menu.render(game);
             return;
@@ -295,6 +319,7 @@
       kero.input.on(Input.DOWN, () => {
         switch (game.menu) {
           case Menu.MAIN:
+          case Menu.SHOP:
             game.menuSelectedIndex = Math.min(Menu.getMenuLength(game), game.menuSelectedIndex + 1);
             kero.menu.render(game);
             return;
@@ -350,11 +375,19 @@
           kero.socket.emit("action", { type: "sleep" });
         },
         buy: (itemId) => {
-          kero.socket.emit("action", { type: "buy", itemId });
+          game.menu = Menu.CLOSED;
+          game.menuSelectedIndex = 0;
+          kero.menu.render(game);
+          kero.socket.emit("action", { type: "buy", itemId }, (response) => {
+            console.log(">> res", response);
+            kero.sprite.emote(response.reason, 1000);
+          });
         },
-        // consume: (itemId) => {
-        //   kero.socket.emit("action", { type: "consume", itemId  });
-        // },
+        shop: () => {
+          game.menu = Menu.SHOP;
+          game.menuSelectedIndex = 0;
+          kero.menu.render(game);
+        },
         move: (direction) => {
           kero.socket.emit("action", { type: "move", direction });
         },

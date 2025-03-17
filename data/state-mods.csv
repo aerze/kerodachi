@@ -1,7 +1,7 @@
 state,cooldown,restType,restRate,engeryType,energyRate,goldType,goldRate
 idle,2000,null,null,null,null,null,null
 crash,30000,mul,-2,null,null,mul,0
-sleep,2000,mul,-4,null,null,mul,0.1
-watch,2000,mul,0,mul,2,mul,2
+sleep,2000,mul,-4,null,null,mul,0
+watch,2000,mul,0,mul,2,mul,0.5
 fishing,5000,mul,2,mul,2,null,null
 mining,5000,mul,2,mul,2,null,null

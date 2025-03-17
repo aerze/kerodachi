@@ -49,6 +49,8 @@ export interface DachiData {
   gold: number;
   goldRate: number;
   goldRateMods: DachiStatRateMod[];
+
+  inventory: Record<string, any>;
 }
 
 export type DachiActions =
@@ -67,7 +69,7 @@ export type DachiActionCooldowns = Record<DachiActions, number>;
 
 export interface DachiAction {
   type: DachiActions;
-  options: any;
+  [key: string]: any;
 }
 
 export interface DachiResponse {

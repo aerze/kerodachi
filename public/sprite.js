@@ -13,13 +13,35 @@ export class Sprite extends Events {
     },
   };
 
+  static EMOTE_CONFIG = {
+    broke: {
+      backgroundImage: `url("assets/emotes/emotes1.png")`,
+    },
+    failed: {
+      backgroundImage: `url("assets/emotes/emotes2.png")`,
+    },
+    ok: {
+      backgroundImage: `url("assets/emotes/emotes3.png")`,
+    },
+  };
+
   constructor(kero) {
     super();
     this.kero = kero;
     this.$sprite = document.getElementById("sprite");
+    this.$emote = document.getElementById("emote");
   }
 
   events = {};
+
+  emote(key, time) {
+    console.log(this.$emote, Sprite.EMOTE_CONFIG[key]);
+    this.$emote.style.backgroundImage = Sprite.EMOTE_CONFIG[key].backgroundImage;
+    this.$emote.style.display = "flex";
+    setTimeout(() => {
+      this.$emote.style.display = "none";
+    }, time);
+  }
 
   /**
    * @param {{}} state

@@ -12,15 +12,25 @@ function div(className, textContent, action) {
 export class Menu extends Events {
   static CLOSED = 0;
   static MAIN = 1;
+  static SHOP = 2;
 
   static main_config = [
     [div("menu-item", "Idle"), "idle"],
     [div("menu-item", "Sleep"), "sleep"],
     [div("menu-item", "Watch"), "watch"],
+    [div("menu-item", "Shop"), "shop"],
+  ];
+
+  static shop_config = [
+    [div("menu-item", "Cookie"), "cookie", 200],
+    [div("menu-item", "Sammich"), "sammich", 500],
+    [div("menu-item", "Pizza"), "pizza", 1000],
+    [div("menu-item", "vim"), "vim", 999999],
   ];
 
   static menu_config = {
     1: Menu.main_config,
+    2: Menu.shop_config,
   };
 
   static getMenuLength(game) {
@@ -29,6 +39,15 @@ export class Menu extends Events {
 
   static getMenuAction(game) {
     return Menu.menu_config[game.menu][game.menuSelectedIndex][1] ?? "";
+  }
+
+  static getMenuItem(game) {
+    return Menu.menu_config[game.menu][game.menuSelectedIndex];
+  }
+
+  static getMenuItemData(game) {
+    const [element, ...data] = Menu.getMenuItem(game);
+    return data;
   }
 
   constructor(kero) {
