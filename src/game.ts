@@ -354,6 +354,7 @@ async function handleDachiAction(
 
       if (dachi.gold >= price) {
         // buy item
+        dachi.inventory = dachi.inventory ?? {};
         dachi.inventory[itemId] = (dachi.inventory[itemId] ?? 0) + 1;
 
         // spend money
