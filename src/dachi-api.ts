@@ -18,8 +18,42 @@ export class DachiAPI {
     let dachi = await this.collection.findOne({ twitchId: socket.data.session.userid });
     if (!dachi) dachi = await this.create(socket);
     if (!dachi) return null;
-    return dachi;
+    return this.migrate(dachi);
   };
+
+  migrate(dachi: WithId<DachiData>) {
+    const startingVersion = dachi.version;
+    switch (dachi.version) {
+      // adds version and inventory
+      case undefined: {
+        dachi.inventory = {};
+        dachi.version = 0;
+      }
+    }
+
+    if (dachi.version !== startingVersion) {
+      this.save(dachi);
+    }
+
+    return dachi;
+  }
+
+  migrations(dachi: WithId<DachiData>) {
+    switch (dachi.version) {
+      case 0: // adds inventory
+        dachi.inventory = {};
+        dachi.version = 1;
+
+      case undefined:
+        dachi.version = 0;
+        break;
+
+      default:
+        break;
+    }
+
+    return dachi;
+  }
 
   save = async (dachi: WithId<DachiData>): Promise<boolean> => {
     const { _id, ...dachiData } = dachi;
@@ -46,6 +80,8 @@ export class DachiAPI {
     const dachiData: DachiData = {
       name: socket.data?.session?.username || "Ribit",
       state: DachiState.IDLE,
+      twitchId: socket.data?.session?.userid,
+      version: 0,
       rest: GameConfig.Rest.max,
       restRate: GameConfig.Rest.rate,
       restRateMods: [],
@@ -55,7 +91,6 @@ export class DachiAPI {
       gold: GameConfig.Gold.min,
       goldRate: GameConfig.Gold.rate,
       goldRateMods: [],
-      twitchId: socket.data?.session?.userid,
       inventory: {},
     };
     setStateStatRateMods(dachiData, GameConfig.StateMods.idle);

@@ -34,6 +34,7 @@ export interface DachiData {
   name: string;
   state: DachiState;
   twitchId: string;
+  version: number;
 
   /** range(0 - 10000) */
   rest: number;
